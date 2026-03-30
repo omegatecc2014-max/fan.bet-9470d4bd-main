@@ -1,0 +1,22 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - heading "Fan.bet" [level=1] [ref=e6]
+      - paragraph [ref=e7]: Entre para fazer previsões e ganhar.
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]: Email
+        - textbox "seu@email.com" [ref=e11]
+      - generic [ref=e12]:
+        - generic [ref=e13]: Senha
+        - textbox "••••••••" [ref=e14]
+      - button "Entrar" [ref=e15] [cursor=pointer]
+    - paragraph [ref=e16]:
+      - text: Ainda não tem conta?
+      - link "Criar conta" [ref=e17] [cursor=pointer]:
+        - /url: /register
+```
