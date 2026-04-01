@@ -8,6 +8,9 @@ import { SearchBar } from "@/components/SearchBar";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { localDB, LocalPost } from "@/lib/storage";
+import { useWallet } from "@/hooks/useWallet";
+import type { CurrencyType } from "@/data/currencies";
+import { currencies } from "@/data/currencies";
 
 type FeedTab = "all" | "following";
 
@@ -17,6 +20,7 @@ export default function FeedPage() {
   const [activeTab, setActiveTab] = useState<FeedTab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [localPosts, setLocalPosts] = useState<LocalPost[]>([]);
+  const { wallet } = useWallet();
 
   useEffect(() => {
     const fetchLocalPosts = async () => {
@@ -44,7 +48,7 @@ export default function FeedPage() {
   };
 
   const filteredHints = useMemo(() => {
-    let hints = [...localPosts, ...hintCards]; // Merging local posts first
+    let hints = [...localPosts, ...hintCards];
 
     if (activeTab === "following") {
       hints = hints.filter((h) => followingIds.includes(h.influencer.id));
@@ -71,9 +75,18 @@ export default function FeedPage() {
     setSelectedHint(hint);
   };
 
-  const handleConfirm = (hintId: string, category: string, amount: number, prediction: string) => {
-    toast.success(`⭐ ${amount} Estrelas apostadas em ${prediction}!`, {
-      description: "Boa sorte! Os resultados saem à meia-noite.",
+  const handleConfirm = (
+    hintId: string,
+    category: string,
+    amount: number,
+    prediction: string,
+    currency: CurrencyType
+  ) => {
+    const cur = currencies.find((c) => c.id === currency);
+    const emoji = cur?.emoji ?? "⭐";
+    const name = cur?.name ?? "Estrelas";
+    toast.success(`${emoji} ${amount} ${name} apostadas em "${prediction}"!`, {
+      description: `Categoria: ${category} · Boa sorte! Os resultados saem à meia-noite.`,
     });
   };
 
@@ -133,7 +146,7 @@ export default function FeedPage() {
 
       <PredictionDrawer
         hint={selectedHint}
-        userStars={currentUser.stars}
+        userWallet={wallet}
         onClose={() => setSelectedHint(null)}
         onConfirm={handleConfirm}
         isOwner={selectedHint?.influencer.id === currentUser.id}

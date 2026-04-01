@@ -225,8 +225,23 @@ export interface BlockedUser {
   reason: string | null;
 }
 
+// ── support tickets ─────────────────────────────────────────
+export type TicketType = "assistance" | "complaint";
+export type TicketStatus = "open" | "in_progress" | "closed";
+
+export interface SupportTicket {
+  id: string;
+  user_id: string;
+  protocol: string;
+  type: TicketType;
+  subject: string;
+  message: string;
+  status: TicketStatus;
+  created_at: string;
+}
+
 // ── Supabase DB wrapper type ──────────────────────────────
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       profiles: {
@@ -252,7 +267,7 @@ export interface Database {
       page_events: {
         Row: PageEvent;
         Insert: Omit<PageEvent, "id" | "created_at">;
-        Update: Partial<Omit<PageEvent, "id" | "created_at">;
+        Update: Partial<Omit<PageEvent, "id" | "created_at">>;
       };
       notifications: {
         Row: Notification;
@@ -289,6 +304,23 @@ export interface Database {
         Insert: { user_id: string; blocked_user_id: string; reason?: string };
         Update: Partial<{ user_id: string; blocked_user_id: string; reason?: string }>;
       };
+      support_tickets: {
+        Row: SupportTicket;
+        Insert: Omit<SupportTicket, "id" | "created_at">;
+        Update: Partial<Omit<SupportTicket, "id" | "created_at">>;
+      };
+    };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
+    };
+    Enums: {
+      [_ in never]: never;
+    };
+    CompositeTypes: {
+      [_ in never]: never;
     };
   };
-}
+};

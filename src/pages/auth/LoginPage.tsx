@@ -22,6 +22,51 @@ export default function LoginPage() {
 
       if (error) throw error;
       if (data.user) {
+        // Track Login History
+        const userAgent = navigator.userAgent;
+        const deviceType = /Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent) ? 'mobile' : /tablet|ipad|playbook|silk/i.test(userAgent) ? 'tablet' : 'desktop';
+        const browser = userAgent.includes("Chrome") ? "Chrome" : userAgent.includes("Safari") ? "Safari" : userAgent.includes("Firefox") ? "Firefox" : "Browser";
+        
+        try {
+          // Clear current session flags
+          await (supabase as any).from("user_sessions").update({ is_current_session: false }).eq("user_id", data.user.id);
+          
+          // Create new session
+          const expiresAt = new Date(Date.now() + 86400000 * 30).toISOString(); // 30 days
+          const { data: sessionData } = await (supabase as any).from("user_sessions").insert({
+            user_id: data.user.id,
+            device_type: deviceType as any, // deviceType might not strictly match SessionDeviceType
+            device_name: `${browser} - ${deviceType}`,
+            browser: browser,
+            is_current_session: true,
+            is_active: true,
+            expires_at: expiresAt,
+            last_active_at: new Date().toISOString(),
+            operating_system: null,
+            ip_address: null,
+            location: null
+          }).select('id').single();
+
+          if (sessionData) {
+            localStorage.setItem("fanbet_session_id", sessionData.id);
+          }
+
+          // Create login history
+          await (supabase as any).from("login_history").insert({
+            user_id: data.user.id,
+            event_type: "login",
+            device_type: deviceType,
+            device_name: `${browser} - ${deviceType}`,
+            user_agent: userAgent,
+            success: true,
+            ip_address: null,
+            location: null,
+            metadata: null
+          });
+        } catch (e) {
+          console.error("Erro ao registrar estatísticas de login", e);
+        }
+
         toast.success("Login efetuado com sucesso!");
         navigate("/");
       }

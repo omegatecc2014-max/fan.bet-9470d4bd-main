@@ -18,6 +18,9 @@ import {
   X,
   TrendingUp,
   BellRing,
+  Headset,
+  UserCheck2,
+  Trophy,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,12 +28,15 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { path: "/admin", label: "Dashboard", icon: LayoutDashboard, badge: null },
   { path: "/admin/users", label: "Usuários", icon: Users, badge: "1.2k" },
+  { path: "/admin/leads", label: "Leads", icon: UserCheck2, badge: "NEW" },
   { path: "/admin/moderation", label: "Moderação", icon: ShieldCheck, badge: "23" },
   { path: "/admin/payments", label: "Pagamentos", icon: CreditCard, badge: null },
   { path: "/admin/flow", label: "Fluxo de Usuário", icon: Activity, badge: null },
   { path: "/admin/influencers", label: "Influenciadores", icon: Star, badge: "7" },
+  { path: "/admin/tournaments", label: "Torneios", icon: Trophy, badge: null },
   { path: "/admin/notifications", label: "Notificações", icon: BellRing, badge: null },
   { path: "/admin/analytics", label: "Analytics", icon: TrendingUp, badge: null },
+  { path: "/admin/support", label: "Chamados", icon: Headset, badge: null },
 ];
 
 interface AdminLayoutProps {

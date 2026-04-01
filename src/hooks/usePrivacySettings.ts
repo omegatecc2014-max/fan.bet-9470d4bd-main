@@ -57,10 +57,12 @@ export function useUpdatePrivacySettings() {
       if (!isSupabaseConfigured || !user) {
         return;
       }
-      const { error } = await (supabase as any).rpc("fn_update_privacy_settings", {
-        p_user_id: user.id,
-        ...settings,
-      });
+      const rpcParams = Object.entries(settings).reduce((acc, [key, value]) => {
+        acc[`p_${key}`] = value;
+        return acc;
+      }, { p_user_id: user.id } as Record<string, any>);
+
+      const { error } = await (supabase as any).rpc("fn_update_privacy_settings", rpcParams);
       if (error) throw error;
     },
     onSuccess: () => {

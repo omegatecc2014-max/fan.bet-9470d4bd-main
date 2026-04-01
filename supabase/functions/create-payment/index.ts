@@ -1,11 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// @ts-ignore: Deno is defined in the Supabase Edge Function environment
+declare const Deno: any;
+
 const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN')
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-serve(async (req) => {
+serve(async (req: any) => {
   const { amount, currency_id, description, payer_email, payer_name, payer_cpf, method } = await req.json()
 
   // 1. Create Internal Transaction
@@ -31,7 +34,8 @@ serve(async (req) => {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': transaction.id
       },
       body: JSON.stringify({
         transaction_amount: amount,
@@ -46,7 +50,8 @@ serve(async (req) => {
             number: payer_cpf
           }
         },
-        external_reference: transaction.id
+        external_reference: transaction.id,
+        date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30 minutes
       })
     })
   } else {

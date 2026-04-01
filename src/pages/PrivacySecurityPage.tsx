@@ -52,8 +52,9 @@ export default function PrivacySecurityPage() {
     try {
       await updatePrivacy.mutateAsync({ [key]: value });
       toast.success("Configuração atualizada");
-    } catch {
-      toast.error("Erro ao salvar");
+    } catch (error: any) {
+      console.error("Privacy change error:", error);
+      toast.error(`Erro ao salvar: ${error.message || error}`);
     }
   };
 
@@ -61,8 +62,9 @@ export default function PrivacySecurityPage() {
     try {
       await updateSecurity.mutateAsync({ [key]: value });
       toast.success("Configuração atualizada");
-    } catch {
-      toast.error("Erro ao salvar");
+    } catch (error: any) {
+      console.error("Security change error:", error);
+      toast.error(`Erro ao salvar: ${error.message || error}`);
     }
   };
 
@@ -535,28 +537,29 @@ export default function PrivacySecurityPage() {
             <div className="space-y-3">
               {sessions.map((session) => {
                 const DeviceIcon = deviceIcons[session.device_type] || Monitor;
+                const isCurrent = session.id === localStorage.getItem("fanbet_session_id") || (!localStorage.getItem("fanbet_session_id") && session.is_current_session);
                 return (
                   <div key={session.id} className={`flex items-center gap-3 p-3 rounded-lg ${
-                    session.is_current_session ? "bg-primary/10 border border-primary/20" : "bg-muted/30"
+                    isCurrent ? "bg-primary/10 border border-primary/20" : "bg-muted/30"
                   }`}>
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                      session.is_current_session ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
+                      isCurrent ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
                     }`}>
                       <DeviceIcon className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium truncate">{session.device_name || session.device_type}</p>
-                        {session.is_current_session && (
+                        {isCurrent && (
                           <Badge variant="secondary" className="text-[10px]">Atual</Badge>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate">
                         {session.location || session.ip_address}
-                        {!session.is_current_session && ` • ${formatTimeAgo(session.last_active_at)}`}
+                        {!isCurrent && ` • ${formatTimeAgo(session.last_active_at)}`}
                       </p>
                     </div>
-                    {!session.is_current_session && (
+                    {!isCurrent && (
                       <button
                         onClick={() => handleTerminateSession(session.id)}
                         className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive"

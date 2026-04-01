@@ -43,6 +43,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     try {
+      if (user) {
+        const sessionId = localStorage.getItem("fanbet_session_id");
+        if (sessionId) {
+          // Invalidate session
+          await (supabase as any).from("user_sessions").update({ is_active: false }).eq("id", sessionId);
+          localStorage.removeItem("fanbet_session_id");
+        }
+        
+        // Track logout
+        const userAgent = navigator.userAgent;
+        const deviceType = /Mobile|Android|iP(hone|od)|IEMobile|BlackBerry|Kindle|Silk-Accelerated|(hpw|web)OS|Opera M(obi|ini)/.test(userAgent) ? 'mobile' : /tablet|ipad|playbook|silk/i.test(userAgent) ? 'tablet' : 'desktop';
+        const browser = userAgent.includes("Chrome") ? "Chrome" : userAgent.includes("Safari") ? "Safari" : userAgent.includes("Firefox") ? "Firefox" : "Browser";
+        
+        await (supabase as any).from("login_history").insert({
+          user_id: user.id,
+          event_type: "logout",
+          device_type: deviceType,
+          device_name: `${browser} - ${deviceType}`,
+          user_agent: userAgent,
+          success: true
+        });
+      }
+
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       toast.success("Saiu com sucesso");

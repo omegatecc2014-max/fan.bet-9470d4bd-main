@@ -13,6 +13,7 @@ import RankingsPage from "./pages/RankingsPage";
 import WalletPage from "./pages/WalletPage";
 import ProfilePage from "./pages/ProfilePage";
 import InfluencerDashboard from "./pages/influencer/InfluencerDashboard";
+
 import PostHintPage from "./pages/influencer/PostHintPage";
 import QuestionnairePage from "./pages/influencer/QuestionnairePage";
 import PrivacySecurityPage from "./pages/PrivacySecurityPage";
@@ -26,6 +27,10 @@ import UserFlowPage from "./pages/admin/UserFlowPage";
 import InfluencersPage from "./pages/admin/InfluencersPage";
 import AnalyticsPage from "./pages/admin/AnalyticsPage";
 import NotificationsPage from "./pages/admin/NotificationsPage";
+import SupportPage from "./pages/admin/SupportPage";
+import LeadsPage from "./pages/admin/LeadsPage";
+import TournamentsPage from "./pages/admin/TournamentsPage";
+import HelpCenterPage from "./pages/HelpCenterPage";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +43,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
           {/* Admin Panel */}
+
           <Route
             path="/admin"
             element={
@@ -102,6 +108,30 @@ const App = () => (
               </AdminLayout>
             }
           />
+          <Route
+            path="/admin/support"
+            element={
+              <AdminLayout>
+                <SupportPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/leads"
+            element={
+              <AdminLayout>
+                <LeadsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/tournaments"
+            element={
+              <AdminLayout>
+                <TournamentsPage />
+              </AdminLayout>
+            }
+          />
 
           {/* Auth Pages */}
           <Route path="/login" element={<LoginPage />} />
@@ -118,7 +148,9 @@ const App = () => (
                   <Route path="/rankings" element={<RankingsPage />} />
                   <Route path="/wallet" element={<WalletPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/help" element={<HelpCenterPage />} />
                   <Route path="/privacy-security" element={<PrivacySecurityPage />} />
+
                   <Route path="/influencer" element={<InfluencerDashboard />} />
                   <Route path="/influencer/post-hint" element={<PostHintPage />} />
                   <Route path="/influencer/questionnaire" element={<QuestionnairePage />} />
@@ -131,7 +163,8 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
-    </WalletProvider>
+
+      </WalletProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

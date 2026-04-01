@@ -23,6 +23,7 @@ const menuItems = [
 export default function ProfilePage() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
+
   return (
     <div className="max-w-lg mx-auto px-4 py-6 pb-24">
       <motion.div
