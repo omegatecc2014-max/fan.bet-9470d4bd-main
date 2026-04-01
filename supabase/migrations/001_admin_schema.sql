@@ -26,10 +26,12 @@ create index if not exists profiles_email_idx   on public.profiles (email);
 -- Row Level Security
 alter table public.profiles enable row level security;
 
+drop policy if exists "admin_select_profiles" on public.profiles;
 create policy "admin_select_profiles"
   on public.profiles for select
   using (auth.jwt() ->> 'role' = 'admin');
 
+drop policy if exists "admin_update_profiles" on public.profiles;
 create policy "admin_update_profiles"
   on public.profiles for update
   using (auth.jwt() ->> 'role' = 'admin');
@@ -57,10 +59,12 @@ create index if not exists influencer_profiles_tier_idx       on public.influenc
 
 alter table public.influencer_profiles enable row level security;
 
+drop policy if exists "admin_select_influencer_profiles" on public.influencer_profiles;
 create policy "admin_select_influencer_profiles"
   on public.influencer_profiles for select
   using (auth.jwt() ->> 'role' = 'admin');
 
+drop policy if exists "admin_update_influencer_profiles" on public.influencer_profiles;
 create policy "admin_update_influencer_profiles"
   on public.influencer_profiles for update
   using (auth.jwt() ->> 'role' = 'admin');
@@ -86,10 +90,12 @@ create index if not exists transactions_created_at_idx on public.transactions (c
 
 alter table public.transactions enable row level security;
 
+drop policy if exists "admin_select_transactions" on public.transactions;
 create policy "admin_select_transactions"
   on public.transactions for select
   using (auth.jwt() ->> 'role' = 'admin');
 
+drop policy if exists "admin_update_transactions" on public.transactions;
 create policy "admin_update_transactions"
   on public.transactions for update
   using (auth.jwt() ->> 'role' = 'admin');
@@ -115,10 +121,12 @@ create index if not exists content_reports_created_at_idx on public.content_repo
 
 alter table public.content_reports enable row level security;
 
+drop policy if exists "admin_select_content_reports" on public.content_reports;
 create policy "admin_select_content_reports"
   on public.content_reports for select
   using (auth.jwt() ->> 'role' = 'admin');
 
+drop policy if exists "admin_update_content_reports" on public.content_reports;
 create policy "admin_update_content_reports"
   on public.content_reports for update
   using (auth.jwt() ->> 'role' = 'admin');
@@ -140,6 +148,7 @@ create index if not exists page_events_created_at_idx  on public.page_events (cr
 
 alter table public.page_events enable row level security;
 
+drop policy if exists "admin_select_page_events" on public.page_events;
 create policy "admin_select_page_events"
   on public.page_events for select
   using (auth.jwt() ->> 'role' = 'admin');

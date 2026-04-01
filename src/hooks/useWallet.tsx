@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useState } from "react";
 import { UserWallet, initialWalletData } from "@/data/currencies";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
 
 interface WalletContextType {
   wallet: UserWallet;
-  purchasePackage: (currencyId: keyof UserWallet, amount: number) => Promise<void>;
+  purchasePackage: (currencyId: keyof UserWallet, amount: number, price: number, method: 'pix' | 'cc') => Promise<any>;
   isPurchasing: boolean;
 }
 
@@ -14,18 +15,41 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [wallet, setWallet] = useState<UserWallet>(initialWalletData);
   const [isPurchasing, setIsPurchasing] = useState(false);
 
-  const purchasePackage = async (currencyId: keyof UserWallet, amount: number) => {
+  const purchasePackage = async (
+    currencyId: keyof UserWallet, 
+    amount: number, 
+    price: number, 
+    method: 'pix' | 'cc'
+  ) => {
     setIsPurchasing(true);
     try {
-      // Simulate network request for purchase processing
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setWallet(prev => ({
-        ...prev,
-        [currencyId]: prev[currencyId] + amount
-      }));
-      toast.success(`Compra efetuada com sucesso! +${amount}`);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, cpf')
+        .eq('id', user.id)
+        .single();
+
+      const { data, error } = await supabase.functions.invoke('create-payment', {
+        body: {
+          amount: price,
+          currency_id: currencyId,
+          description: `Compra de ${amount} ${currencyId}`,
+          payer_email: user.email,
+          payer_name: profile?.full_name || user.user_metadata?.full_name || user.email || 'Usuário',
+          payer_cpf: profile?.cpf,
+          method: method
+        }
+      });
+
+      if (error) throw error;
+      return data;
     } catch (error) {
-      toast.error("Erro ao efetuar compra.");
+      console.error(error);
+      toast.error("Erro ao iniciar pagamento.");
+      throw error;
     } finally {
       setIsPurchasing(false);
     }

@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   TrendingUp,
+  BellRing,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const navItems = [
   { path: "/admin/payments", label: "Pagamentos", icon: CreditCard, badge: null },
   { path: "/admin/flow", label: "Fluxo de Usuário", icon: Activity, badge: null },
   { path: "/admin/influencers", label: "Influenciadores", icon: Star, badge: "7" },
+  { path: "/admin/notifications", label: "Notificações", icon: BellRing, badge: null },
   { path: "/admin/analytics", label: "Analytics", icon: TrendingUp, badge: null },
 ];
 

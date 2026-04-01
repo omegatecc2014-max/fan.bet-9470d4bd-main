@@ -11,6 +11,7 @@ interface PredictionDrawerProps {
   userStars: number;
   onClose: () => void;
   onConfirm: (hintId: string, category: string, amount: number, prediction: string) => void;
+  isOwner?: boolean;
 }
 
 const predictionOptions: Record<string, string[]> = {
@@ -21,7 +22,7 @@ const predictionOptions: Record<string, string[]> = {
   social: ["🎉 Saindo", "🏠 Ficando em Casa"],
 };
 
-export function PredictionDrawer({ hint, userStars, onClose, onConfirm }: PredictionDrawerProps) {
+export function PredictionDrawer({ hint, userStars, onClose, onConfirm, isOwner }: PredictionDrawerProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedPrediction, setSelectedPrediction] = useState<string | null>(null);
   const [amount, setAmount] = useState(50);
@@ -29,7 +30,7 @@ export function PredictionDrawer({ hint, userStars, onClose, onConfirm }: Predic
   const starAmounts = [10, 25, 50, 100, 250];
 
   const handleConfirm = () => {
-    if (!hint || !selectedCategory || !selectedPrediction) return;
+    if (!hint || !selectedCategory || !selectedPrediction || isOwner) return;
     onConfirm(hint.id, selectedCategory, amount, selectedPrediction);
     onClose();
   };

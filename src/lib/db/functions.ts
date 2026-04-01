@@ -8,7 +8,7 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import type {
   Profile, InfluencerProfile, Transaction,
-  ContentReport, PageEvent
+  ContentReport, PageEvent, Notification, UserNotification, NotificationStats
 } from "@/lib/database.types";
 
 // ──────────────────────────────────────────────────────────
@@ -30,6 +30,13 @@ export const FN_CREATE_USER           = "fn_create_user"           as const;
 export const FN_DELETE_USER           = "fn_delete_user"           as const;
 export const FN_GET_USER_HISTORY      = "fn_get_user_history"      as const;
 export const FN_GET_USER_REPORTS      = "fn_get_user_reports"      as const;
+export const FN_LIST_NOTIFICATIONS    = "fn_list_notifications"    as const;
+export const FN_CREATE_NOTIFICATION   = "fn_create_notification"   as const;
+export const FN_SEND_NOTIFICATION     = "fn_send_notification"     as const;
+export const FN_CANCEL_NOTIFICATION   = "fn_cancel_notification"   as const;
+export const FN_DELETE_NOTIFICATION    = "fn_delete_notification"   as const;
+export const FN_GET_NOTIFICATION_DELIVERY = "fn_get_notification_delivery" as const;
+export const FN_GET_NOTIFICATION_STATS = "fn_get_notification_stats" as const;
 
 // ──────────────────────────────────────────────────────────
 // Return types
@@ -68,6 +75,13 @@ export interface AnalyticsData {
   cohort: { cohort: string; values: (number | null)[] }[];
   deviceBreakdown: { mobile: number; desktop: number; tablet: number };
 }
+
+export type NotificationFilters = {
+  status?: string;
+  target_type?: string;
+  page?: number;
+  pageSize?: number;
+};
 
 // ──────────────────────────────────────────────────────────
 // Mock fallback data
@@ -144,6 +158,23 @@ const MOCK_ANALYTICS: AnalyticsData = {
   ],
   deviceBreakdown: { mobile:68, desktop:26, tablet:6 },
 };
+
+const MOCK_NOTIFICATIONS: Notification[] = [
+  { id:"n1", created_at: new Date(Date.now()-60000).toISOString(), title:"Manutenção Programada", message:"Sistema estará em manutenção das 02h às 04h.", type:"warning", target_type:"all", target_value:null, sent_by:"Admin", read_count:2847, total_recipients:5600, status:"sent" },
+  { id:"n2", created_at: new Date(Date.now()-3600000).toISOString(), title:"Novos termos de uso", message:"Atualizamos nossos termos de uso. Por favor, revise.", type:"info", target_type:"all", target_value:null, sent_by:"Admin", read_count:1203, total_recipients:5600, status:"sent" },
+  { id:"n3", created_at: new Date(Date.now()-86400000).toISOString(), title:"Bônus de boas-vindas", message:"Ganhe 100% no primeiro depósito! Use o código BONUS100.", type:"success", target_type:"fans", target_value:null, sent_by:"Marketing", read_count:892, total_recipients:5200, status:"sent" },
+  { id:"n4", created_at: new Date(Date.now()-172800000).toISOString(), title:"Workshop para influenciadores", message:"Participe do workshop sobre estratégias de engajamento.", type:"info", target_type:"influencers", target_value:null, sent_by:"Admin", read_count:45, total_recipients:94, status:"sent" },
+  { id:"n5", created_at: new Date(Date.now()-259200000).toISOString(), title:"Nova funcionalidade", message:"Em breve: chat ao vivo durante os jogos!", type:"system", target_type:"all", target_value:null, sent_by:"Dev Team", read_count:0, total_recipients:0, status:"draft" },
+  { id:"n6", created_at: new Date(Date.now()-345600000).toISOString(), title:"Aviso importante", message:"Atualização de segurança obrigatória.", type:"error", target_type:"all", target_value:null, sent_by:"Admin", read_count:5580, total_recipients:5600, status:"sent" },
+];
+
+let mockUserNotifications: UserNotification[] = [
+  { id:"un1", notification_id:"n1", user_id:"u1", user_email:"lucas@email.com", user_name:"Lucas Ferreira", delivered:true, delivered_at:new Date(Date.now()-60000).toISOString(), read:true, read_at:new Date(Date.now()-30000).toISOString(), created_at:new Date(Date.now()-60000).toISOString() },
+  { id:"un2", notification_id:"n1", user_id:"u2", user_email:"ana@email.com", user_name:"Ana Souza", delivered:true, delivered_at:new Date(Date.now()-60000).toISOString(), read:true, read_at:new Date(Date.now()-20000).toISOString(), created_at:new Date(Date.now()-60000).toISOString() },
+  { id:"un3", notification_id:"n1", user_id:"u3", user_email:"joao@email.com", user_name:"João Pedro", delivered:true, delivered_at:new Date(Date.now()-60000).toISOString(), read:false, read_at:null, created_at:new Date(Date.now()-60000).toISOString() },
+  { id:"un4", notification_id:"n1", user_id:"u4", user_email:"mari@email.com", user_name:"Mariana Castro", delivered:true, delivered_at:new Date(Date.now()-60000).toISOString(), read:true, read_at:new Date(Date.now()-40000).toISOString(), created_at:new Date(Date.now()-60000).toISOString() },
+  { id:"un5", notification_id:"n1", user_id:"u5", user_email:"rafael@email.com", user_name:"Rafael Oliveira", delivered:false, delivered_at:null, read:false, read_at:null, created_at:new Date(Date.now()-60000).toISOString() },
+];
 
 // ──────────────────────────────────────────────────────────
 // Helper
@@ -319,8 +350,128 @@ export async function listInfluencers(): Promise<InfluencerWithProfile[]> {
 
 export async function getAnalytics(): Promise<AnalyticsData> {
   if (!isSupabaseConfigured) { log(FN_GET_ANALYTICS, "mock"); return MOCK_ANALYTICS; }
-  // In production, this would call a Postgres RPC that aggregates the analytics.
-  // For now, return the same mock data even when Supabase is available
-  // since full analytics aggregation requires additional SQL functions.
   return MOCK_ANALYTICS;
+}
+
+export async function listNotifications(filters: NotificationFilters = {}): Promise<Notification[]> {
+  if (!isSupabaseConfigured) {
+    log(FN_LIST_NOTIFICATIONS, "mock");
+    let result = [...MOCK_NOTIFICATIONS];
+    if (filters.status && filters.status !== "all") result = result.filter(n => n.status === filters.status);
+    if (filters.target_type && filters.target_type !== "all") result = result.filter(n => n.target_type === filters.target_type);
+    return result;
+  }
+  const { data, error } = await (supabase as any).rpc("fn_list_notifications", {
+    p_status: filters.status || null,
+    p_target_type: filters.target_type || null,
+    p_limit: filters.pageSize || 50,
+    p_offset: ((filters.page || 1) - 1) * (filters.pageSize || 50)
+  });
+  if (error) { console.error(FN_LIST_NOTIFICATIONS, error); return MOCK_NOTIFICATIONS; }
+  return data ?? MOCK_NOTIFICATIONS;
+}
+
+export async function createNotification(data: {
+  title: string;
+  message: string;
+  type?: string;
+  target_type?: string;
+  target_value?: string;
+  send_now?: boolean;
+}): Promise<string> {
+  if (!isSupabaseConfigured) {
+    log(FN_CREATE_NOTIFICATION, "mock");
+    const newNotif: Notification = {
+      id: "n" + Date.now(),
+      created_at: new Date().toISOString(),
+      title: data.title,
+      message: data.message,
+      type: (data.type || "info") as any,
+      target_type: (data.target_type || "all") as any,
+      target_value: data.target_value || null,
+      sent_by: "Admin",
+      read_count: 0,
+      total_recipients: data.target_type === "all" ? 5600 : data.target_type === "influencers" ? 94 : data.target_type === "fans" ? 5200 : 0,
+      status: data.send_now ? "sent" : "draft"
+    };
+    MOCK_NOTIFICATIONS.unshift(newNotif);
+    return newNotif.id;
+  }
+  const { data: result, error } = await (supabase as any).rpc("fn_create_notification", {
+    p_title: data.title,
+    p_message: data.message,
+    p_type: data.type || "info",
+    p_target_type: data.target_type || "all",
+    p_target_value: data.target_value || null,
+    p_send_now: data.send_now || false
+  });
+  if (error) throw error;
+  return result;
+}
+
+export async function sendNotification(id: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    log(FN_SEND_NOTIFICATION, "mock");
+    const notif = MOCK_NOTIFICATIONS.find(n => n.id === id);
+    if (notif) {
+      notif.status = "sent";
+      notif.total_recipients = notif.target_type === "all" ? 5600 : notif.target_type === "influencers" ? 94 : notif.target_type === "fans" ? 5200 : 0;
+    }
+    return;
+  }
+  const { error } = await (supabase as any).rpc("fn_send_notification", { p_notification_id: id });
+  if (error) throw error;
+}
+
+export async function cancelNotification(id: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    log(FN_CANCEL_NOTIFICATION, "mock");
+    const notif = MOCK_NOTIFICATIONS.find(n => n.id === id);
+    if (notif) notif.status = "cancelled";
+    return;
+  }
+  const { error } = await (supabase as any).rpc("fn_cancel_notification", { p_notification_id: id });
+  if (error) throw error;
+}
+
+export async function deleteNotification(id: string): Promise<void> {
+  if (!isSupabaseConfigured) {
+    log(FN_DELETE_NOTIFICATION, "mock");
+    const idx = MOCK_NOTIFICATIONS.findIndex(n => n.id === id);
+    if (idx !== -1) MOCK_NOTIFICATIONS.splice(idx, 1);
+    return;
+  }
+  const { error } = await (supabase as any).rpc("fn_delete_notification", { p_notification_id: id });
+  if (error) throw error;
+}
+
+export async function getNotificationDelivery(id: string): Promise<UserNotification[]> {
+  if (!isSupabaseConfigured) {
+    log(FN_GET_NOTIFICATION_DELIVERY, "mock");
+    return mockUserNotifications.filter(un => un.notification_id === id);
+  }
+  const { data, error } = await (supabase as any).rpc("fn_get_notification_delivery", { p_notification_id: id });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getNotificationStats(id: string): Promise<NotificationStats> {
+  if (!isSupabaseConfigured) {
+    log(FN_GET_NOTIFICATION_STATS, "mock");
+    const notif = MOCK_NOTIFICATIONS.find(n => n.id === id);
+    if (!notif) return { total_recipients: 0, delivered_count: 0, read_count: 0, delivery_rate: 0, read_rate: 0 };
+    const deliveries = mockUserNotifications.filter(un => un.notification_id === id);
+    const delivered = deliveries.filter(d => d.delivered).length;
+    const read = deliveries.filter(d => d.read).length;
+    return {
+      total_recipients: notif.total_recipients,
+      delivered_count: delivered,
+      read_count: read,
+      delivery_rate: notif.total_recipients > 0 ? (delivered / notif.total_recipients) * 100 : 0,
+      read_rate: notif.total_recipients > 0 ? (read / notif.total_recipients) * 100 : 0
+    };
+  }
+  const { data, error } = await (supabase as any).rpc("fn_get_notification_stats", { p_notification_id: id });
+  if (error) throw error;
+  return data?.[0] || { total_recipients: 0, delivered_count: 0, read_count: 0, delivery_rate: 0, read_rate: 0 };
 }

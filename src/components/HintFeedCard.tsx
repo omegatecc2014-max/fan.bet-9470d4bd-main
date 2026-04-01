@@ -9,9 +9,10 @@ interface HintFeedCardProps {
   onPredict: (hint: HintCard) => void;
   isFollowing?: boolean;
   onToggleFollow?: () => void;
+  isOwner?: boolean;
 }
 
-export function HintFeedCard({ hint, onPredict, isFollowing, onToggleFollow }: HintFeedCardProps) {
+export function HintFeedCard({ hint, onPredict, isFollowing, onToggleFollow, isOwner }: HintFeedCardProps) {
   const [liked, setLiked] = useState(false);
 
   return (
@@ -33,7 +34,7 @@ export function HintFeedCard({ hint, onPredict, isFollowing, onToggleFollow }: H
           <span className="text-muted-foreground text-xs">{hint.postedAt}</span>
         </div>
         <div className="flex items-center gap-2">
-          {onToggleFollow && (
+          {!isOwner && onToggleFollow && (
             <motion.button
               whileTap={{ scale: 0.9 }}
               onClick={onToggleFollow}
@@ -55,6 +56,11 @@ export function HintFeedCard({ hint, onPredict, isFollowing, onToggleFollow }: H
                 </>
               )}
             </motion.button>
+          )}
+          {isOwner && (
+            <div className="px-2.5 py-1 rounded-full text-[10px] font-display font-bold bg-star/10 text-star border border-star/20">
+              MEU POST
+            </div>
           )}
           <div className="flex items-center gap-1 text-xs text-accent">
             <Clock className="w-3 h-3" />
@@ -93,11 +99,16 @@ export function HintFeedCard({ hint, onPredict, isFollowing, onToggleFollow }: H
           <Heart className={`w-5 h-5 transition-colors ${liked ? "fill-destructive text-destructive" : ""}`} />
         </button>
         <motion.button
-          whileTap={{ scale: 0.95 }}
-          onClick={() => onPredict(hint)}
-          className="gradient-star text-primary-foreground font-display font-bold text-sm px-6 py-2.5 rounded-full glow-star"
+          whileTap={isOwner ? {} : { scale: 0.95 }}
+          onClick={() => !isOwner && onPredict(hint)}
+          disabled={isOwner}
+          className={`font-display font-bold text-sm px-6 py-2.5 rounded-full transition-all ${
+            isOwner 
+              ? "bg-muted text-muted-foreground cursor-not-allowed opacity-70" 
+              : "gradient-star text-primary-foreground glow-star"
+          }`}
         >
-          ⭐ Fazer Previsão
+          {isOwner ? "Sua Dica" : "⭐ Fazer Previsão"}
         </motion.button>
       </div>
     </motion.div>

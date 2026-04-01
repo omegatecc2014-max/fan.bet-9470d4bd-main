@@ -15,6 +15,7 @@ import ProfilePage from "./pages/ProfilePage";
 import InfluencerDashboard from "./pages/influencer/InfluencerDashboard";
 import PostHintPage from "./pages/influencer/PostHintPage";
 import QuestionnairePage from "./pages/influencer/QuestionnairePage";
+import PrivacySecurityPage from "./pages/PrivacySecurityPage";
 import NotFound from "./pages/NotFound";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -24,6 +25,7 @@ import PaymentsPage from "./pages/admin/PaymentsPage";
 import UserFlowPage from "./pages/admin/UserFlowPage";
 import InfluencersPage from "./pages/admin/InfluencersPage";
 import AnalyticsPage from "./pages/admin/AnalyticsPage";
+import NotificationsPage from "./pages/admin/NotificationsPage";
 
 const queryClient = new QueryClient();
 
@@ -92,6 +94,14 @@ const App = () => (
               </AdminLayout>
             }
           />
+          <Route
+            path="/admin/notifications"
+            element={
+              <AdminLayout>
+                <NotificationsPage />
+              </AdminLayout>
+            }
+          />
 
           {/* Auth Pages */}
           <Route path="/login" element={<LoginPage />} />
@@ -108,6 +118,7 @@ const App = () => (
                   <Route path="/rankings" element={<RankingsPage />} />
                   <Route path="/wallet" element={<WalletPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/privacy-security" element={<PrivacySecurityPage />} />
                   <Route path="/influencer" element={<InfluencerDashboard />} />
                   <Route path="/influencer/post-hint" element={<PostHintPage />} />
                   <Route path="/influencer/questionnaire" element={<QuestionnairePage />} />

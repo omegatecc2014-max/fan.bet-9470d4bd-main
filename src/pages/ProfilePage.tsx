@@ -4,6 +4,7 @@ import { RankBadge } from "@/components/RankBadge";
 import { StarBalance } from "@/components/StarBalance";
 import { useAuth } from "@/hooks/useAuth";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { Settings, ChevronRight, LogOut, Shield, HelpCircle } from "lucide-react";
 
 const stats = [
@@ -13,14 +14,15 @@ const stats = [
 ];
 
 const menuItems = [
-  { icon: Settings, label: "Configurações" },
-  { icon: Shield, label: "Privacidade e Segurança" },
-  { icon: HelpCircle, label: "Central de Ajuda" },
-  { icon: LogOut, label: "Sair" },
+  { icon: Settings, label: "Configurações", path: "/settings" },
+  { icon: Shield, label: "Privacidade e Segurança", path: "/privacy-security" },
+  { icon: HelpCircle, label: "Central de Ajuda", path: "/help" },
+  { icon: LogOut, label: "Sair", action: "signout" },
 ];
 
 export default function ProfilePage() {
   const { signOut } = useAuth();
+  const navigate = useNavigate();
   return (
     <div className="max-w-lg mx-auto px-4 py-6 pb-24">
       <motion.div
@@ -56,14 +58,22 @@ export default function ProfilePage() {
         {menuItems.map((item, i) => (
           <motion.button
             key={item.label}
-            onClick={item.label === "Sair" ? signOut : undefined}
+            onClick={() => {
+              if (item.action === "signout") {
+                signOut();
+              } else if (item.path) {
+                navigate(item.path);
+              }
+            }}
             initial={{ opacity: 0, x: -10 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.3 + i * 0.08 }}
-            className="flex items-center gap-3 w-full p-3.5 rounded-xl hover:bg-muted/50 transition-colors"
+            className={`flex items-center gap-3 w-full p-3.5 rounded-xl hover:bg-muted/50 transition-colors ${
+              item.action === "signout" ? "text-destructive hover:text-destructive" : ""
+            }`}
           >
-            <item.icon className="w-5 h-5 text-muted-foreground" />
-            <span className="flex-1 text-left font-body text-foreground text-sm">{item.label}</span>
+            <item.icon className={`w-5 h-5 ${item.action === "signout" ? "text-destructive" : "text-muted-foreground"}`} />
+            <span className="flex-1 text-left font-body text-sm">{item.label}</span>
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </motion.button>
         ))}

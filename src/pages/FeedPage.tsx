@@ -64,6 +64,10 @@ export default function FeedPage() {
   }, [activeTab, followingIds, searchQuery]);
 
   const handlePredict = (hint: HintCard) => {
+    if (hint.influencer.id === currentUser.id) {
+      toast.error("Você não pode apostar no seu próprio post!");
+      return;
+    }
     setSelectedHint(hint);
   };
 
@@ -121,6 +125,7 @@ export default function FeedPage() {
               onPredict={handlePredict}
               isFollowing={followingIds.includes(hint.influencer.id)}
               onToggleFollow={() => toggleFollow(hint.influencer.id)}
+              isOwner={hint.influencer.id === currentUser.id}
             />
           </motion.div>
         ))
@@ -131,6 +136,7 @@ export default function FeedPage() {
         userStars={currentUser.stars}
         onClose={() => setSelectedHint(null)}
         onConfirm={handleConfirm}
+        isOwner={selectedHint?.influencer.id === currentUser.id}
       />
     </div>
   );

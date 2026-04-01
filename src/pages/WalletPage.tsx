@@ -9,12 +9,12 @@ import { useState } from "react";
 import { useWallet } from "@/hooks/useWallet";
 
 const packages = [
-  { currency: "stars" as CurrencyType, amount: 500, price: "R$19,90", popular: true },
-  { currency: "diamonds" as CurrencyType, amount: 10, price: "R$24,90" },
-  { currency: "chickens" as CurrencyType, amount: 50, price: "R$9,90" },
-  { currency: "gold" as CurrencyType, amount: 3, price: "R$49,90" },
-  { currency: "crowns" as CurrencyType, amount: 1, price: "R$99,90" },
-  { currency: "unicorns" as CurrencyType, amount: 1, price: "R$249,90" },
+  { currency: "stars" as CurrencyType, amount: 500, price: 19.90, priceLabel: "R$19,90", popular: true },
+  { currency: "diamonds" as CurrencyType, amount: 10, price: 24.90, priceLabel: "R$24,90" },
+  { currency: "chickens" as CurrencyType, amount: 50, price: 9.90, priceLabel: "R$9,90" },
+  { currency: "gold" as CurrencyType, amount: 3, price: 49.90, priceLabel: "R$49,90" },
+  { currency: "crowns" as CurrencyType, amount: 1, price: 99.90, priceLabel: "R$99,90" },
+  { currency: "unicorns" as CurrencyType, amount: 1, price: 249.90, priceLabel: "R$249,90" },
 ];
 
 const history = [
@@ -28,6 +28,28 @@ const history = [
 export default function WalletPage() {
   const [activeTab, setActiveTab] = useState<"portfolio" | "shop" | "convert">("portfolio");
   const { wallet, purchasePackage, isPurchasing } = useWallet();
+  const [selectedPackage, setSelectedPackage] = useState<any>(null);
+  const [pixData, setPixData] = useState<any>(null);
+
+  const handlePurchase = async (method: 'pix' | 'cc') => {
+    if (!selectedPackage) return;
+    try {
+      const response = await purchasePackage(
+        selectedPackage.currency,
+        selectedPackage.amount,
+        selectedPackage.price,
+        method
+      );
+
+      if (method === 'pix') {
+        setPixData(response);
+      } else if (response.init_point) {
+        window.location.href = response.init_point;
+      }
+    } catch (e) {
+      // Error is already toasted in hook
+    }
+  };
 
   const totalValue = currencies.reduce((sum, c) => {
     return sum + wallet[c.id] * c.value;
@@ -173,7 +195,7 @@ export default function WalletPage() {
                   transition={{ delay: i * 0.08 }}
                   whileTap={{ scale: 0.97 }}
                   disabled={isPurchasing}
-                  onClick={() => purchasePackage(pkg.currency, pkg.amount)}
+                  onClick={() => setSelectedPackage(pkg)}
                   className={`relative p-4 rounded-xl border text-center transition-all disabled:opacity-50 ${
                     pkg.popular ? `border-star glow-star gradient-card` : "border-border bg-card"
                   }`}
@@ -189,7 +211,7 @@ export default function WalletPage() {
                   <p className={`font-display font-bold ${cur.textColorClass}`}>
                     {pkg.amount.toLocaleString()} {cur.name}
                   </p>
-                  <p className="text-muted-foreground text-sm font-body">{pkg.price}</p>
+                  <p className="text-muted-foreground text-sm font-body">{pkg.priceLabel}</p>
                   <span className={`text-[10px] font-display uppercase mt-1 inline-block ${rarityColors[cur.rarity]}`}>
                     {cur.rarity}
                   </span>
@@ -233,6 +255,88 @@ export default function WalletPage() {
             ))}
           </div>
         </motion.div>
+      )}
+      {/* Modal de Checkout */}
+      {selectedPackage && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            className="w-full max-w-sm bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl relative"
+          >
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-display font-bold text-xl">Confirmar Compra</h3>
+              <button onClick={() => { setSelectedPackage(null); setPixData(null); }} className="text-muted-foreground hover:text-foreground">
+                ✕
+              </button>
+            </div>
+
+            {!pixData ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-4 p-4 rounded-2xl bg-muted/30 border border-border">
+                  <div className={`w-12 h-12 rounded-xl ${currencies.find(c => c.id === selectedPackage.currency)?.gradientClass} flex items-center justify-center text-2xl`}>
+                    {currencies.find(c => c.id === selectedPackage.currency)?.emoji}
+                  </div>
+                  <div>
+                    <p className="font-display font-bold">{selectedPackage.amount} {currencies.find(c => c.id === selectedPackage.currency)?.name}</p>
+                    <p className="text-muted-foreground text-sm font-body">{selectedPackage.priceLabel}</p>
+                  </div>
+                </div>
+
+                <p className="text-sm font-display font-semibold text-muted-foreground uppercase">Escolha o método:</p>
+                
+                <button
+                  onClick={() => handlePurchase('pix')}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-card border border-border hover:border-star hover:bg-star/5 transition-all group"
+                  disabled={isPurchasing}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#00bdae]/10 text-[#00bdae] flex items-center justify-center">
+                      <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L4.5 12 12 22l7.5-10L12 2zM12 18.5L7.5 12 12 5.5l4.5 6.5-4.5 6.5z" />
+                      </svg>
+                    </div>
+                    <span className="font-display font-bold">PIX</span>
+                  </div>
+                  <ArrowRightLeft className="w-4 h-4 text-muted-foreground group-hover:text-star transition-colors" />
+                </button>
+
+                <button
+                  onClick={() => handlePurchase('cc')}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl bg-card border border-border hover:border-star hover:bg-star/5 transition-all group"
+                  disabled={isPurchasing}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-star/10 text-star flex items-center justify-center">
+                      <Plus className="w-6 h-6" />
+                    </div>
+                    <span className="font-display font-bold">Cartão de Crédito</span>
+                  </div>
+                  <ArrowRightLeft className="w-4 h-4 text-muted-foreground group-hover:text-star transition-colors" />
+                </button>
+              </div>
+            ) : (
+              <div className="text-center space-y-4">
+                <p className="text-sm font-body text-muted-foreground">Escaneie o QR Code ou copie o código PIX</p>
+                <div className="bg-white p-4 rounded-2xl w-48 h-48 mx-auto flex items-center justify-center border border-border">
+                  <img src={`data:image/png;base64,${pixData.point_of_interaction.transaction_data.qr_code_base64}`} alt="QR Code PIX" className="w-full h-full" />
+                </div>
+                <div className="space-y-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(pixData.point_of_interaction.transaction_data.qr_code);
+                      toast.success("Código copidado!");
+                    }}
+                    className="w-full py-3 rounded-xl bg-muted font-display font-bold text-sm"
+                  >
+                    Copiar Código PIX
+                  </button>
+                  <p className="text-[10px] text-muted-foreground font-body">Após o pagamento, o saldo será atualizado em instantes.</p>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </div>
       )}
     </div>
   );

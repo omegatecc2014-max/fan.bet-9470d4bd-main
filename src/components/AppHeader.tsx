@@ -1,6 +1,6 @@
 import { currencies } from "@/data/currencies";
-import { Bell } from "lucide-react";
 import { useWallet } from "@/hooks/useWallet";
+import { NotificationDropdown } from "@/components/NotificationDropdown";
 
 export function AppHeader() {
   const { wallet } = useWallet();
@@ -21,10 +21,7 @@ export function AppHeader() {
               {wallet[c.id].toLocaleString()}
             </span>
           ))}
-          <button className="relative text-muted-foreground ml-1">
-            <Bell className="w-5 h-5" />
-            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-destructive" />
-          </button>
+          <NotificationDropdown />
         </div>
       </div>
     </header>
