@@ -5,8 +5,8 @@ const navItems = [
   { to: "/", icon: Home, label: "Feed" },
   { to: "/rankings", icon: Trophy, label: "Ranking" },
   { to: "/wallet", icon: Wallet, label: "Carteira" },
-  { to: "/influencer", icon: Star, label: "Influencer" },
   { to: "/profile", icon: User, label: "Perfil" },
+  { to: "/influencer", icon: Star, label: "Influencer", highlighted: true },
 ];
 
 export function BottomNav() {
@@ -19,13 +19,19 @@ export function BottomNav() {
             to={item.to}
             end={item.to === "/"}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-colors ${
-                isActive ? "text-star" : "text-muted-foreground"
+              `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all ${
+                item.highlighted
+                  ? isActive
+                    ? "text-star gradient-star px-4 py-2 -mt-2 glow-star"
+                    : "text-star hover:bg-star/10"
+                  : isActive
+                    ? "text-star"
+                    : "text-muted-foreground hover:text-foreground"
               }`
             }
           >
-            <item.icon className="w-5 h-5" />
-            <span className="text-[10px] font-display font-medium">{item.label}</span>
+            <item.icon className={`w-5 h-5 ${item.highlighted ? "drop-shadow-sm" : ""}`} />
+            <span className={`text-[10px] font-display font-medium ${item.highlighted ? "font-bold" : ""}`}>{item.label}</span>
           </NavLink>
         ))}
       </div>
