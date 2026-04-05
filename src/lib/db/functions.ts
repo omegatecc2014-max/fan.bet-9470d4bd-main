@@ -230,6 +230,93 @@ export async function listTransactions(filters: TransactionFilters = {}): Promis
   return data ?? MOCK_TRANSACTIONS;
 }
 
+export async function requestWithdrawal(
+  amountTotal: number, 
+  pixKey: string,
+  options?: {
+    pixKeyType?: "cpf" | "cnpj" | "email" | "phone" | "random";
+    recipientName?: string;
+    recipientBank?: string;
+    convertedCurrency?: string;
+    convertedAmount?: number;
+    conversionRate?: number;
+  }
+): Promise<{ protocol: string; transactionId: string }> {
+  const protocol = "SQT-" + Date.now().toString(36).toUpperCase() + "-" + Math.random().toString(36).substring(2, 6).toUpperCase();
+  
+  const newTxn: Transaction = {
+    id: "TXN-" + Math.floor(Math.random() * 10000),
+    created_at: new Date().toISOString(),
+    profile_id: "u1",
+    profile_name: "Você (Atual)",
+    profile_avatar: "VC",
+    type: "withdrawal",
+    method: "PIX",
+    amount: amountTotal,
+    status: "pending",
+    pix_key: pixKey,
+    pix_key_type: options?.pixKeyType || "cpf",
+    pix_recipient_name: options?.recipientName,
+    pix_recipient_bank: options?.recipientBank,
+    converted_currency: options?.convertedCurrency,
+    converted_amount: options?.convertedAmount,
+    conversion_rate: options?.conversionRate,
+    protocol: protocol
+  };
+
+  if (!isSupabaseConfigured) {
+    MOCK_TRANSACTIONS.unshift(newTxn);
+    return { protocol, transactionId: newTxn.id };
+  }
+  
+  const { data: { user } } = await supabase.auth.getUser();
+  let profileName = "Usuário";
+  let profileAvatar = "US";
+  let profileEmail = "";
+  let profileDocument = "";
+  
+  if (user) {
+    const { data: profile } = await (supabase as any).from("profiles").select("name, email, cpf, avatar_initials").eq("id", user.id).single();
+    newTxn.profile_id = user.id;
+    if (profile) {
+      profileName = profile.name ?? "Usuário";
+      profileAvatar = profile.avatar_initials ?? "US";
+      profileEmail = profile.email ?? "";
+      profileDocument = profile.cpf ?? "";
+      newTxn.pix_recipient_name = options?.recipientName ?? profileName;
+    }
+    newTxn.profile_name = profileName;
+    newTxn.profile_avatar = profileAvatar;
+    newTxn.profile_email = profileEmail;
+    newTxn.profile_document = profileDocument;
+  }
+  
+  const insertData = {
+    profile_id: newTxn.profile_id,
+    profile_name: newTxn.profile_name,
+    profile_avatar: newTxn.profile_avatar,
+    profile_email: newTxn.profile_email,
+    profile_document: newTxn.profile_document,
+    type: newTxn.type,
+    method: newTxn.method,
+    amount: newTxn.amount,
+    status: newTxn.status,
+    pix_key: newTxn.pix_key,
+    pix_key_type: newTxn.pix_key_type,
+    pix_recipient_name: newTxn.pix_recipient_name,
+    pix_recipient_bank: newTxn.pix_recipient_bank,
+    converted_currency: newTxn.converted_currency,
+    converted_amount: newTxn.converted_amount,
+    conversion_rate: newTxn.conversion_rate,
+    protocol: newTxn.protocol
+  };
+  
+  const { data, error } = await (supabase as any).from("transactions").insert([insertData]).select("id, protocol").single();
+  if (error) throw error;
+  
+  return { protocol: data?.protocol ?? protocol, transactionId: data?.id ?? "" };
+}
+
 export async function listContentReports(statusFilter?: string): Promise<ContentReport[]> {
   if (!isSupabaseConfigured) {
     log(FN_LIST_CONTENT_REPORTS, "mock");
@@ -333,9 +420,42 @@ export async function getUserContentReports(name: string): Promise<ContentReport
 }
 
 export async function approveTransaction(id: string): Promise<void> {
-  if (!isSupabaseConfigured) { log(FN_APPROVE_TRANSACTION, "mock"); return; }
-  const { error } = await (supabase as any).from("transactions").update({ status: "success" }).eq("id", id);
+  if (!isSupabaseConfigured) { 
+    log(FN_APPROVE_TRANSACTION, "mock"); 
+    return; 
+  }
+  
+  const { data: tx, error: fetchError } = await (supabase as any)
+    .from("transactions")
+    .select("profile_id, profile_name, amount, protocol")
+    .eq("id", id)
+    .single();
+    
+  if (fetchError) throw fetchError;
+  
+  const { error } = await (supabase as any)
+    .from("transactions")
+    .update({ 
+      status: "success",
+      processed_at: new Date().toISOString(),
+      processed_by: "Admin"
+    })
+    .eq("id", id);
+    
   if (error) throw error;
+  
+  if (tx?.profile_id) {
+    try {
+      await sendUserNotification(
+        tx.profile_id,
+        "Saque Aprovado! 🎉",
+        `Seu saque de R$ ${tx.amount?.toFixed(2)} foi aprovado e o pagamento será processado em breve. Protocolo: ${tx.protocol || id}`,
+        "success"
+      );
+    } catch (e) {
+      console.error("Failed to send notification:", e);
+    }
+  }
 }
 
 export async function listInfluencers(): Promise<InfluencerWithProfile[]> {
@@ -474,4 +594,57 @@ export async function getNotificationStats(id: string): Promise<NotificationStat
   const { data, error } = await (supabase as any).rpc("fn_get_notification_stats", { p_notification_id: id });
   if (error) throw error;
   return data?.[0] || { total_recipients: 0, delivered_count: 0, read_count: 0, delivery_rate: 0, read_rate: 0 };
+}
+
+export async function sendUserNotification(
+  userId: string,
+  title: string,
+  message: string,
+  type: "info" | "success" | "warning" | "error" | "system" = "info"
+): Promise<string> {
+  const notifId = "n" + Date.now();
+  
+  if (!isSupabaseConfigured) {
+    const newNotif: Notification = {
+      id: notifId,
+      created_at: new Date().toISOString(),
+      title,
+      message,
+      type: type as any,
+      target_type: "specific_users",
+      target_value: userId,
+      sent_by: "Sistema",
+      read_count: 0,
+      total_recipients: 1,
+      status: "sent"
+    };
+    MOCK_NOTIFICATIONS.unshift(newNotif);
+    
+    mockUserNotifications.unshift({
+      id: "un" + Date.now(),
+      notification_id: notifId,
+      user_id: userId,
+      user_email: "user@example.com",
+      user_name: "Usuário",
+      delivered: true,
+      delivered_at: new Date().toISOString(),
+      read: false,
+      read_at: null,
+      created_at: new Date().toISOString()
+    });
+    
+    return notifId;
+  }
+  
+  const { data, error } = await (supabase as any).rpc("fn_create_notification", {
+    p_title: title,
+    p_message: message,
+    p_type: type,
+    p_target_type: "specific_users",
+    p_target_value: userId,
+    p_send_now: true
+  });
+  
+  if (error) throw error;
+  return data || notifId;
 }

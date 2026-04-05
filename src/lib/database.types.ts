@@ -13,9 +13,6 @@ export type Json =
 export type UserRole = "fan" | "influencer" | "admin";
 export type UserStatus = "active" | "suspended" | "banned" | "pending";
 export type InfluencerTier = "gold" | "silver" | "bronze";
-export type TransactionType = "deposit" | "withdrawal";
-export type TransactionStatus = "success" | "pending" | "failed" | "chargeback";
-export type PaymentMethod = "PIX" | "Cartão" | "TED";
 export type ContentType = "hint" | "chat" | "image";
 export type ContentStatus = "pending" | "approved" | "removed";
 export type DeviceType = "mobile" | "desktop" | "tablet";
@@ -26,12 +23,14 @@ export interface Profile {
   created_at: string;
   name: string;
   email: string;
+  cpf?: string;
   role: UserRole;
   status: UserStatus;
   balance: number;
   bet_count: number;
   verified: boolean;
   avatar_initials: string;
+  full_name?: string;
 }
 
 // ── influencer_profiles ───────────────────────────────────
@@ -51,16 +50,40 @@ export interface InfluencerProfile {
 }
 
 // ── transactions ──────────────────────────────────────────
+export type TransactionType = "deposit" | "withdrawal" | "conversion";
+export type PaymentMethod = "PIX" | "Cartão" | "TED";
+export type TransactionStatus = "success" | "pending" | "failed" | "chargeback" | "cancelled";
+export type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random";
+
 export interface Transaction {
   id: string;
   created_at: string;
   profile_id: string;
   profile_name: string;
   profile_avatar: string;
+  profile_email?: string;
+  profile_document?: string;
   type: TransactionType;
   method: PaymentMethod;
   amount: number;
   status: TransactionStatus;
+  
+  // PIX data
+  pix_key?: string;
+  pix_key_type?: PixKeyType;
+  pix_recipient_name?: string;
+  pix_recipient_bank?: string;
+  
+  // Conversion data
+  converted_currency?: string;
+  converted_amount?: number;
+  conversion_rate?: number;
+  
+  // Protocol & admin
+  protocol?: string;
+  admin_notes?: string;
+  processed_by?: string;
+  processed_at?: string;
 }
 
 // ── content_reports ───────────────────────────────────────

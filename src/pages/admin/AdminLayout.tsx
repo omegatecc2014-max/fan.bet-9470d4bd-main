@@ -18,9 +18,11 @@ import {
   X,
   TrendingUp,
   BellRing,
-  Headset,
   UserCheck2,
   Trophy,
+  Headset,
+  Send,
+  Coins,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,7 @@ const navItems = [
   { path: "/admin/leads", label: "Leads", icon: UserCheck2, badge: "NEW" },
   { path: "/admin/moderation", label: "Moderação", icon: ShieldCheck, badge: "23" },
   { path: "/admin/payments", label: "Pagamentos", icon: CreditCard, badge: null },
+  { path: "/admin/transfers", label: "Transferências", icon: Send, badge: null },
   { path: "/admin/flow", label: "Fluxo de Usuário", icon: Activity, badge: null },
   { path: "/admin/influencers", label: "Influenciadores", icon: Star, badge: "7" },
   { path: "/admin/tournaments", label: "Torneios", icon: Trophy, badge: null },

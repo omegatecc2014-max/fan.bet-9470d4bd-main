@@ -1,12 +1,15 @@
-import { currencies, rarityColors } from "@/data/currencies";
-import type { CurrencyType } from "@/data/currencies";
+import { currencies, rarityColors, type CurrencyType } from "@/data/currencies";
 import { CurrencyBadge } from "@/components/CurrencyBadge";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import starIcon from "@/assets/star-icon.png";
-import { ArrowDownLeft, ArrowUpRight, Plus, ArrowRightLeft, TrendingUp } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Plus, ArrowRightLeft, TrendingUp, Wallet, X, Copy, Check, Send, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useWallet } from "@/hooks/useWallet";
+import { useRequestCoinTransfer } from "@/hooks/useCoinTransfers";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
 const packages = [
   { currency: "stars" as CurrencyType, amount: 500, price: 19.90, priceLabel: "R$19,90", popular: true },
@@ -27,9 +30,26 @@ const history = [
 
 export default function WalletPage() {
   const [activeTab, setActiveTab] = useState<"portfolio" | "shop" | "convert">("portfolio");
-  const { wallet, purchasePackage, isPurchasing } = useWallet();
+  const { wallet, purchasePackage, isPurchasing, requestWithdrawal, convertToBRL } = useWallet();
   const [selectedPackage, setSelectedPackage] = useState<any>(null);
   const [pixData, setPixData] = useState<any>(null);
+  
+  // Withdrawal modal state
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [withdrawCurrency, setWithdrawCurrency] = useState<CurrencyType>("stars");
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [pixKey, setPixKey] = useState("");
+  const [pixKeyType, setPixKeyType] = useState<"cpf" | "cnpj" | "email" | "phone" | "random">("cpf");
+  const [recipientName, setRecipientName] = useState("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [withdrawalResult, setWithdrawalResult] = useState<{ protocol: string; amount: number; brlAmount: number } | null>(null);
+  
+  // Transfer modal state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferCurrency, setTransferCurrency] = useState<CurrencyType>("stars");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferRecipient, setTransferRecipient] = useState("");
+  const [transferMessage, setTransferMessage] = useState("");
 
   const handlePurchase = async (method: 'pix' | 'cc') => {
     if (!selectedPackage) return;
@@ -48,6 +68,89 @@ export default function WalletPage() {
       }
     } catch (e) {
       // Error is already toasted in hook
+    }
+  };
+
+  const handleWithdrawal = async () => {
+    const amount = parseInt(withdrawAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Informe uma quantidade válida");
+      return;
+    }
+    if (amount > wallet[withdrawCurrency]) {
+      toast.error("Saldo insuficiente");
+      return;
+    }
+    if (!pixKey.trim() || !recipientName.trim()) {
+      toast.error("Preencha todos os campos");
+      return;
+    }
+
+    try {
+      const conversion = convertToBRL(withdrawCurrency, amount);
+      const result = await requestWithdrawal({
+        currencyType: withdrawCurrency,
+        amount: amount,
+        pixKey: pixKey,
+        pixKeyType: pixKeyType,
+        recipientName: recipientName
+      });
+      
+      setWithdrawalResult({
+        protocol: result.protocol,
+        amount: amount,
+        brlAmount: conversion.amount
+      });
+      setShowWithdrawalModal(false);
+      setShowSuccessModal(true);
+      
+      // Clear form
+      setWithdrawAmount("");
+      setPixKey("");
+      setRecipientName("");
+    } catch (e) {
+      // Error is already toasted in hook
+    }
+  };
+
+  const calculatedBRL = withdrawAmount ? convertToBRL(withdrawCurrency, parseInt(withdrawAmount) || 0).amount : 0;
+
+  // Hook for transfers
+  const requestCoinTransfer = useRequestCoinTransfer();
+
+  // Transfer handlers
+  const handleTransfer = async () => {
+    const amount = parseInt(transferAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Informe uma quantidade válida");
+      return;
+    }
+    if (amount > wallet[transferCurrency]) {
+      toast.error("Saldo insuficiente");
+      return;
+    }
+    if (!transferRecipient.trim()) {
+      toast.error("Informe o ID do destinatário");
+      return;
+    }
+
+    try {
+      await requestCoinTransfer.mutateAsync({
+        recipientId: transferRecipient,
+        recipientName: "Usuário",
+        recipientAvatar: "US",
+        currencyType: transferCurrency,
+        amount: amount,
+        message: transferMessage || undefined
+      });
+      
+      toast.success("Transferência solicitada! Aguarde aprovação do admin.");
+      setShowTransferModal(false);
+      setTransferAmount("");
+      setTransferRecipient("");
+      setTransferMessage("");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao solicitar transferência");
     }
   };
 
@@ -226,15 +329,28 @@ export default function WalletPage() {
       {activeTab === "convert" && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
           <div className="gradient-card rounded-2xl border border-border p-5 mb-4 text-center">
-            <ArrowRightLeft className="w-8 h-8 text-star mx-auto mb-3" />
-            <h3 className="font-display font-bold text-lg text-foreground mb-1">Câmbio de Moedas</h3>
-            <p className="text-muted-foreground text-sm font-body mb-4">Troque entre moedas pelas taxas de mercado</p>
+            <Wallet className="w-8 h-8 text-star mx-auto mb-3" />
+            <h3 className="font-display font-bold text-lg text-foreground mb-1">Conversão e Saque</h3>
+            <p className="text-muted-foreground text-sm font-body mb-4">Converta suas moedas virtuais em reais e peça o saque via PIX</p>
             <motion.button
               whileTap={{ scale: 0.97 }}
-              onClick={() => toast.info("Câmbio disponível em breve!")}
+              onClick={() => setShowWithdrawalModal(true)}
               className="gradient-star text-primary-foreground font-display font-bold text-sm px-6 py-2.5 rounded-full glow-star"
             >
-              Abrir Câmbio
+              Solicitar Saque
+            </motion.button>
+          </div>
+
+          <div className="gradient-card rounded-2xl border border-border p-5 mb-4 text-center">
+            <Send className="w-8 h-8 text-purple-400 mx-auto mb-3" />
+            <h3 className="font-display font-bold text-lg text-foreground mb-1">Enviar Moedas</h3>
+            <p className="text-muted-foreground text-sm font-body mb-4">Transfira suas moedas para outro usuário</p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setShowTransferModal(true)}
+              className="bg-purple-500/20 text-purple-400 font-display font-bold text-sm px-6 py-2.5 rounded-full border border-purple-500/30 hover:bg-purple-500/30"
+            >
+              Enviar Moedas
             </motion.button>
           </div>
 
@@ -338,6 +454,303 @@ export default function WalletPage() {
           </motion.div>
         </div>
       )}
+
+      {/* Withdrawal Modal */}
+      <AnimatePresence>
+        {showWithdrawalModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowWithdrawalModal(false)}
+          >
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-display font-bold text-xl">Solicitar Saque</h3>
+                <button onClick={() => setShowWithdrawalModal(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Moeda a converter</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {currencies.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setWithdrawCurrency(c.id)}
+                        className={`p-2 rounded-lg border text-center transition-all ${
+                          withdrawCurrency === c.id 
+                            ? "border-star bg-star/10" 
+                            : "border-border bg-card hover:border-border/80"
+                        } ${wallet[c.id] === 0 ? "opacity-40" : ""}`}
+                        disabled={wallet[c.id] === 0}
+                      >
+                        <span className="text-lg block mb-1">{c.emoji}</span>
+                        <span className="text-xs font-display">{c.name}</span>
+                        <span className="text-[10px] text-muted-foreground block">{wallet[c.id]}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Quantidade</Label>
+                  <Input
+                    type="number"
+                    value={withdrawAmount}
+                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    placeholder="0"
+                    className="bg-muted/30 border-border"
+                  />
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-muted-foreground">Saldo disponível: {wallet[withdrawCurrency]}</span>
+                    <button 
+                      onClick={() => setWithdrawAmount(wallet[withdrawCurrency].toString())}
+                      className="text-[10px] text-star hover:underline"
+                    >
+                      Usar tudo
+                    </button>
+                  </div>
+                </div>
+
+                {withdrawAmount && parseInt(withdrawAmount) > 0 && (
+                  <div className="p-3 rounded-xl bg-star/10 border border-star/20">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Você receberá:</span>
+                      <span className="font-display font-bold text-star">R$ {calculatedBRL.toFixed(2)}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Tipo de chave PIX</Label>
+                  <div className="grid grid-cols-5 gap-1">
+                    {(["cpf", "cnpj", "email", "phone", "random"] as const).map((type) => (
+                      <button
+                        key={type}
+                        onClick={() => setPixKeyType(type)}
+                        className={`p-2 rounded-lg border text-[10px] font-display uppercase transition-all ${
+                          pixKeyType === type 
+                            ? "border-star bg-star/10 text-star" 
+                            : "border-border bg-card text-muted-foreground"
+                        }`}
+                      >
+                        {type === "random" ? "Aleatória" : type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Chave PIX</Label>
+                  <Input
+                    type="text"
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder={
+                      pixKeyType === "email" ? "seu@email.com" : 
+                      pixKeyType === "phone" ? "+5511999999999" : 
+                      "Sua chave PIX"
+                    }
+                    className="bg-muted/30 border-border"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Nome do titular</Label>
+                  <Input
+                    type="text"
+                    value={recipientName}
+                    onChange={(e) => setRecipientName(e.target.value)}
+                    placeholder="Nome completo igual ao banco"
+                    className="bg-muted/30 border-border"
+                  />
+                </div>
+
+                <Button
+                  onClick={handleWithdrawal}
+                  disabled={isPurchasing || !withdrawAmount || !pixKey || !recipientName || parseInt(withdrawAmount) <= 0}
+                  className="w-full gradient-star text-primary-foreground font-display font-bold"
+                >
+                  {isPurchasing ? "Processando..." : "Confirmar Saque"}
+                </Button>
+
+                <p className="text-[10px] text-muted-foreground text-center">
+                  O saque será analisado pela nossa equipe. O prazo de processamento é de até 48 horas úteis.
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && withdrawalResult && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowSuccessModal(false)}
+          >
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-emerald-500" />
+              </div>
+              
+              <h3 className="font-display font-bold text-xl text-foreground mb-2">Saque Solicitado!</h3>
+              <p className="text-muted-foreground text-sm mb-6">Sua solicitação foi enviada com sucesso.</p>
+
+              <div className="p-4 rounded-xl bg-muted/30 border border-border mb-6">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-muted-foreground text-sm">Protocolo:</span>
+                  <span className="font-mono text-sm font-bold text-star">{withdrawalResult.protocol}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-muted-foreground text-sm">Quantidade:</span>
+                  <span className="font-display text-sm">{withdrawalResult.amount} {currencies.find(c => c.id === withdrawCurrency)?.name}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground text-sm">Valor em reais:</span>
+                  <span className="font-display font-bold text-star">R$ {withdrawalResult.brlAmount.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] text-muted-foreground mb-4">
+                Anote o protocolo para acompanhar o status do seu saque. Você receberá uma notificação quando o pagamento for processado.
+              </p>
+
+              <Button
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full gradient-star text-primary-foreground font-display font-bold"
+              >
+                Ok, entendi
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Transfer Modal */}
+      <AnimatePresence>
+        {showTransferModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowTransferModal(false)}
+          >
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm bg-card border border-border rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="font-display font-bold text-xl">Enviar Moedas</h3>
+                <button onClick={() => setShowTransferModal(false)} className="text-muted-foreground hover:text-foreground">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Moeda</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {currencies.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => setTransferCurrency(c.id)}
+                        className={`p-2 rounded-lg border text-center transition-all ${
+                          transferCurrency === c.id 
+                            ? "border-purple-400 bg-purple-400/10" 
+                            : "border-border bg-card hover:border-border/80"
+                        } ${wallet[c.id] === 0 ? "opacity-40" : ""}`}
+                        disabled={wallet[c.id] === 0}
+                      >
+                        <span className="text-lg block mb-1">{c.emoji}</span>
+                        <span className="text-xs font-display">{c.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Quantidade</Label>
+                  <Input
+                    type="number"
+                    value={transferAmount}
+                    onChange={(e) => setTransferAmount(e.target.value)}
+                    placeholder="0"
+                    className="bg-muted/30 border-border"
+                  />
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-muted-foreground">Saldo disponível: {wallet[transferCurrency]}</span>
+                    <button 
+                      onClick={() => setTransferAmount(wallet[transferCurrency].toString())}
+                      className="text-[10px] text-purple-400 hover:underline"
+                    >
+                      Usar tudo
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">ID do Destinatário</Label>
+                  <Input
+                    type="text"
+                    value={transferRecipient}
+                    onChange={(e) => setTransferRecipient(e.target.value)}
+                    placeholder="Cole o ID do usuário"
+                    className="bg-muted/30 border-border"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs text-muted-foreground mb-2 block">Mensagem (opcional)</Label>
+                  <Input
+                    type="text"
+                    value={transferMessage}
+                    onChange={(e) => setTransferMessage(e.target.value)}
+                    placeholder="Algo para o destinatário..."
+                    className="bg-muted/30 border-border"
+                  />
+                </div>
+
+                <Button
+                  onClick={handleTransfer}
+                  disabled={requestCoinTransfer.isPending || !transferAmount || !transferRecipient || parseInt(transferAmount) <= 0}
+                  className="w-full bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 border border-purple-500/30 font-display font-bold"
+                >
+                  {requestCoinTransfer.isPending ? "Enviando..." : "Solicitar Transferência"}
+                </Button>
+
+                <p className="text-[10px] text-muted-foreground text-center">
+                  A transferência será analisada pelo admin e o destinatário precisará aceitar.
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

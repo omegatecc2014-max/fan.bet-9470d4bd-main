@@ -12,6 +12,7 @@ import FeedPage from "./pages/FeedPage";
 import RankingsPage from "./pages/RankingsPage";
 import WalletPage from "./pages/WalletPage";
 import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
 import InfluencerDashboard from "./pages/influencer/InfluencerDashboard";
 
 import PostHintPage from "./pages/influencer/PostHintPage";
@@ -23,6 +24,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import UsersPage from "./pages/admin/UsersPage";
 import ModerationPage from "./pages/admin/ModerationPage";
 import PaymentsPage from "./pages/admin/PaymentsPage";
+import TransfersPage from "./pages/admin/TransfersPage";
 import UserFlowPage from "./pages/admin/UserFlowPage";
 import InfluencersPage from "./pages/admin/InfluencersPage";
 import AnalyticsPage from "./pages/admin/AnalyticsPage";
@@ -73,6 +75,14 @@ const App = () => (
             element={
               <AdminLayout>
                 <PaymentsPage />
+              </AdminLayout>
+            }
+          />
+          <Route
+            path="/admin/transfers"
+            element={
+              <AdminLayout>
+                <TransfersPage />
               </AdminLayout>
             }
           />
@@ -148,6 +158,7 @@ const App = () => (
                   <Route path="/rankings" element={<RankingsPage />} />
                   <Route path="/wallet" element={<WalletPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/help" element={<HelpCenterPage />} />
                   <Route path="/privacy-security" element={<PrivacySecurityPage />} />
 

@@ -78,10 +78,29 @@ create table if not exists public.transactions (
   profile_id       uuid not null references public.profiles (id) on delete cascade,
   profile_name     text not null,
   profile_avatar   text not null,
-  type             text not null check (type in ('deposit', 'withdrawal')),
+  profile_email    text,
+  profile_document text,
+  type             text not null check (type in ('deposit', 'withdrawal', 'conversion')),
   method           text not null check (method in ('PIX', 'Cartão', 'TED')),
   amount           numeric(12, 2) not null,
-  status           text not null check (status in ('success', 'pending', 'failed', 'chargeback')) default 'pending'
+  status           text not null check (status in ('success', 'pending', 'failed', 'chargeback', 'cancelled')) default 'pending',
+  
+  -- Campos para saques/conversões
+  pix_key          text,
+  pix_key_type     text check (pix_key_type in ('cpf', 'cnpj', 'email', 'phone', 'random')),
+  pix_recipient_name text,
+  pix_recipient_bank text,
+  
+  -- Campos de conversão virtual -> real
+  converted_currency text,
+  converted_amount   numeric(12, 2),
+  conversion_rate    numeric(10, 4),
+  
+  -- Protocolo único
+  protocol          text unique default 'PROT-' || gen_random_uuid()::text,
+  admin_notes       text,
+  processed_by      text,
+  processed_at      timestamptz
 );
 
 create index if not exists transactions_status_idx     on public.transactions (status);

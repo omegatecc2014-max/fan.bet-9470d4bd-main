@@ -1,20 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  CreditCard, ArrowDownRight, ArrowUpRight, DollarSign,
+  CreditCard, ArrowDownRight, ArrowUpRight, ArrowRightLeft, DollarSign,
   Search, Filter, Download, MoreHorizontal, CheckCircle2,
-  XCircle, Clock, AlertTriangle, Eye, Loader2
+  XCircle, Clock, AlertTriangle, Eye, Loader2, FileText, User, CreditCardIcon,
+  Send, Calendar, Hash, Bell, MessageSquare, ChevronRight, RefreshCw
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { useTransactions, useApproveTransaction } from "@/hooks/admin/useTransactions";
+import { useTransactions, useApproveTransaction, useRejectTransaction, useSendNotification } from "@/hooks/admin/useTransactions";
 import { toast } from "sonner";
+import type { Transaction } from "@/lib/database.types";
+
+type ProcessingTab = "pending" | "processing" | "completed" | "history";
 
 const monthlyFlow = [
   { name: "Jan", inc: 42000, out: 18000 },
@@ -35,10 +43,11 @@ const statusStyle: Record<string, string> = {
   success:    "bg-emerald-400/15 text-emerald-400 border-emerald-400/20",
   pending:    "bg-yellow-400/15 text-yellow-400 border-yellow-400/20",
   failed:     "bg-red-400/15 text-red-400 border-red-400/20",
+  cancelled:  "bg-gray-400/15 text-gray-400 border-gray-400/20",
   chargeback: "bg-purple-400/15 text-purple-400 border-purple-400/20",
 };
 const statusLabel: Record<string, string> = {
-  success:"Concluído", pending:"Pendente", failed:"Falhou", chargeback:"Chargeback"
+  success:"Concluído", pending:"Pendente", failed:"Falhou", cancelled:"Cancelado", chargeback:"Chargeback"
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -54,6 +63,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const formatDate = (iso: string) => {
+  const date = new Date(iso);
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+};
+
 const timeAgo = (iso: string) => {
   const diffMs = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diffMs / 60000);
@@ -65,17 +85,173 @@ const timeAgo = (iso: string) => {
 
 export default function PaymentsPage() {
   const [filterStatus, setFilterStatus] = useState("all");
-  const { data: transactions = [], isLoading } = useTransactions({ status: filterStatus });
+  const [activeTab, setActiveTab] = useState<ProcessingTab>("pending");
+  const [searchProtocol, setSearchProtocol] = useState("");
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationType, setNotificationType] = useState<"info" | "success" | "warning" | "error">("info");
+  const [rejectReason, setRejectReason] = useState("");
+  const { data: transactions = [], isLoading, refetch } = useTransactions({ status: filterStatus });
   const approveTxn = useApproveTransaction();
+  const rejectTxn = useRejectTransaction();
+  const sendNotif = useSendNotification();
+
+  const pendingWithdrawals = transactions.filter(t => t.type === "withdrawal" && t.status === "pending");
+  const processingWithdrawals = transactions.filter(t => t.type === "withdrawal" && t.status === "pending");
+  const completedWithdrawals = transactions.filter(t => t.type === "withdrawal" && (t.status === "success" || t.status === "failed"));
+  const allWithdrawals = transactions.filter(t => t.type === "withdrawal");
+
+  const filteredTransactions = allWithdrawals.filter(t => 
+    !searchProtocol || t.protocol?.toLowerCase().includes(searchProtocol.toLowerCase()) || 
+    t.profile_name?.toLowerCase().includes(searchProtocol.toLowerCase())
+  );
 
   const handleApprove = async (id: string) => {
     try {
       await approveTxn.mutateAsync(id);
-      toast.success("Transação aprovada com sucesso");
+      toast.success("Saque aprovado! Notificação enviada ao usuário.");
+      setShowDetailModal(false);
     } catch {
       toast.error("Erro ao aprovar transação");
     }
   };
+
+  const handleReject = async () => {
+    if (!selectedTransaction) return;
+    try {
+      await rejectTxn.mutateAsync({ 
+        id: selectedTransaction.id, 
+        reason: rejectReason 
+      });
+      toast.success("Saque reprovado! Notificação enviada ao usuário.");
+      setShowRejectModal(false);
+      setRejectReason("");
+      setShowDetailModal(false);
+    } catch {
+      toast.error("Erro ao reprovar transação");
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!selectedTransaction || !notificationTitle.trim() || !notificationMessage.trim()) {
+      toast.error("Preencha o título e a mensagem");
+      return;
+    }
+    
+    try {
+      await sendNotif.mutateAsync({
+        userId: selectedTransaction.profile_id,
+        title: notificationTitle,
+        message: notificationMessage,
+        type: notificationType,
+        transactionId: selectedTransaction.id
+      });
+      toast.success(`Notificação enviada para ${selectedTransaction.profile_name}!`);
+      setShowNotificationModal(false);
+      setNotificationTitle("");
+      setNotificationMessage("");
+    } catch {
+      toast.error("Erro ao enviar notificação");
+    }
+  };
+
+  const getTabCount = (tab: ProcessingTab) => {
+    switch(tab) {
+      case "pending": return pendingWithdrawals.length;
+      case "processing": return processingWithdrawals.length;
+      case "completed": return completedWithdrawals.length;
+      case "history": return allWithdrawals.length;
+    }
+  };
+
+  const renderWithdrawalCard = (tx: Transaction) => (
+    <motion.div
+      key={tx.id}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all cursor-pointer"
+      onClick={() => { setSelectedTransaction(tx); setShowDetailModal(true); }}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-star/20 flex items-center justify-center text-star font-bold">
+            {tx.profile_avatar}
+          </div>
+          <div>
+            <p className="font-display font-bold text-white text-sm">{tx.profile_name}</p>
+            <p className="text-white/40 text-xs">{tx.profile_email || "Email não disponível"}</p>
+          </div>
+        </div>
+        <Badge className={`text-[10px] border ${statusStyle[tx.status]}`}>
+          {statusLabel[tx.status]}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div className="p-2 rounded-lg bg-white/5">
+          <p className="text-white/40 mb-1">Protocolo</p>
+          <p className="font-mono text-star">{tx.protocol || tx.id.substring(0, 8)}</p>
+        </div>
+        <div className="p-2 rounded-lg bg-white/5">
+          <p className="text-white/40 mb-1">Valor</p>
+          <p className="font-display font-bold text-emerald-400">R$ {tx.amount.toLocaleString("pt-BR")}</p>
+        </div>
+        <div className="p-2 rounded-lg bg-white/5">
+          <p className="text-white/40 mb-1">Data/Hora</p>
+          <p className="text-white/60">{formatDate(tx.created_at)}</p>
+        </div>
+        <div className="p-2 rounded-lg bg-white/5">
+          <p className="text-white/40 mb-1">Chave PIX</p>
+          <p className="font-mono text-white/60 text-[10px] truncate">{tx.pix_key || "N/A"}</p>
+        </div>
+      </div>
+
+      {tx.converted_currency && (
+        <div className="mt-3 p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+          <p className="text-[10px] text-purple-400">
+            Convertido: {tx.converted_amount} {tx.converted_currency?.toUpperCase()} → Taxa: R$ {tx.conversion_rate}
+          </p>
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-3">
+        {tx.status === "pending" && (
+          <>
+            <Button 
+              size="sm" 
+              className="flex-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30"
+              onClick={(e) => { e.stopPropagation(); handleApprove(tx.id); }}
+            >
+              <CheckCircle2 className="w-3 h-3 mr-1" />
+              Aprovar
+            </Button>
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10"
+              onClick={(e) => { e.stopPropagation(); setSelectedTransaction(tx); setShowRejectModal(true); }}
+            >
+              <XCircle className="w-3 h-3 mr-1" />
+              Rejeitar
+            </Button>
+          </>
+        )}
+        <Button 
+          size="sm" 
+          variant="outline"
+          className="border-white/10 text-white/60 hover:bg-white/5"
+          onClick={(e) => { e.stopPropagation(); setSelectedTransaction(tx); setShowNotificationModal(true); }}
+        >
+          <Bell className="w-3 h-3 mr-1" />
+          Notificar
+        </Button>
+      </div>
+    </motion.div>
+  );
 
   return (
     <div className="space-y-5">
@@ -84,7 +260,7 @@ export default function PaymentsPage() {
         {[
           { label: "Volume (30d)",   value: "R$ 410k", change: "+12.5%", up: true,  icon: DollarSign, color: "text-blue-400", bg: "bg-blue-400/10" },
           { label: "Receita Líquida",value: "R$ 145k", change: "+8.2%",  up: true,  icon: ArrowUpRight, color: "text-emerald-400", bg: "bg-emerald-400/10" },
-          { label: "Saques Pendentes",value: "R$ 18k",  change: "24 reqs", up: false, icon: Clock, color: "text-yellow-400", bg: "bg-yellow-400/10" },
+          { label: "Saques Pendentes",value: pendingWithdrawals.length,  change: "reqs", up: false, icon: Clock, color: "text-yellow-400", bg: "bg-yellow-400/10" },
           { label: "Furos/Chargeback",value: "1.2%",   change: "-0.4%",  up: true,  icon: AlertTriangle, color: "text-red-400", bg: "bg-red-400/10" },
         ].map((k, i) => (
           <motion.div key={k.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
@@ -104,6 +280,87 @@ export default function PaymentsPage() {
           </motion.div>
         ))}
       </div>
+
+      {/* Processing Tabs */}
+      <Card className="bg-[#0d0f1a] border-white/5 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display font-bold text-white flex items-center gap-2">
+            <RefreshCw className="w-5 h-5 text-star" />
+            Processamento de Saques
+          </h3>
+          <Button size="sm" variant="outline" onClick={() => refetch()}>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Atualizar
+          </Button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-4 overflow-x-auto">
+          {(["pending", "processing", "completed", "history"] as ProcessingTab[]).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+                activeTab === tab 
+                  ? "bg-star text-black" 
+                  : "bg-white/5 text-white/60 hover:bg-white/10"
+              }`}
+            >
+              {tab === "pending" && <Clock className="w-4 h-4" />}
+              {tab === "processing" && <ArrowRightLeft className="w-4 h-4" />}
+              {tab === "completed" && <CheckCircle2 className="w-4 h-4" />}
+              {tab === "history" && <FileText className="w-4 h-4" />}
+              {tab === "pending" ? "Pendentes" : 
+               tab === "processing" ? "Processando" : 
+               tab === "completed" ? "Concluídos" : "Histórico"}
+              <span className={`px-2 py-0.5 rounded-full text-xs ${
+                activeTab === tab ? "bg-black/20" : "bg-white/10"
+              }`}>
+                {getTabCount(tab)}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Search by Protocol */}
+        <div className="relative mb-4">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={16} />
+          <Input 
+            placeholder="Buscar por protocolo, nome ou email..." 
+            value={searchProtocol}
+            onChange={(e) => setSearchProtocol(e.target.value)}
+            className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-white/30"
+          />
+        </div>
+
+        {/* Transaction List by Tab */}
+        <div className="space-y-3 max-h-[500px] overflow-y-auto">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12 gap-2 text-white/40 text-sm">
+              <Loader2 className="animate-spin" size={16} /> Carregando...
+            </div>
+          ) : activeTab === "pending" && filteredTransactions.filter(t => t.status === "pending").length === 0 ? (
+            <div className="text-center py-12 text-white/40 text-sm">
+              <Clock className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              Nenhum saque pendente
+            </div>
+          ) : activeTab === "completed" && filteredTransactions.filter(t => t.status === "success" || t.status === "failed").length === 0 ? (
+            <div className="text-center py-12 text-white/40 text-sm">
+              <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              Nenhum saque concluído
+            </div>
+          ) : (
+            filteredTransactions
+              .filter(t => {
+                if (activeTab === "pending") return t.status === "pending";
+                if (activeTab === "completed") return t.status === "success" || t.status === "failed";
+                return true;
+              })
+              .slice(0, 20)
+              .map(renderWithdrawalCard)
+          )}
+        </div>
+      </Card>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -157,112 +414,293 @@ export default function PaymentsPage() {
         </Card>
       </div>
 
-      {/* Transactions Table */}
-      <Card className="bg-[#0d0f1a] border-white/5">
-        <div className="p-4 border-b border-white/5 flex flex-col sm:flex-row gap-3 justify-between items-center">
-          <div>
-            <h3 className="font-display font-bold text-white">Transações Recentes</h3>
-            <p className="text-white/40 text-xs mt-0.5">Depósitos, saques e chargebacks</p>
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-48">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-              <Input placeholder="Buscar ID ou usuário..." className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/30 h-9 text-xs" />
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center justify-center w-9 h-9 rounded-lg bg-white/5 border border-white/10 text-white/60 hover:text-white transition-colors">
-                  <Filter size={14} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="bg-[#141828] border-white/10 text-xs w-40">
-                <DropdownMenuItem onClick={()=>setFilterStatus("all")} className="text-white/70 hover:text-white">Todos</DropdownMenuItem>
-                {Object.entries(statusLabel).map(([k,v])=>(
-                  <DropdownMenuItem key={k} onClick={()=>setFilterStatus(k)} className="text-white/70 hover:text-white">{v}</DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <button className="flex items-center gap-2 px-3 h-9 rounded-lg bg-white/5 border border-white/10 text-white/90 hover:bg-white/10 transition-colors text-xs font-medium shrink-0">
-              <Download size={14} /> Exportar
-            </button>
-          </div>
-        </div>
+      {/* Transaction Detail Modal */}
+      <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+        <DialogContent className="bg-[#0d0f1a] border-white/10 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-lg flex items-center gap-2">
+              <FileText className="w-5 h-5 text-star" />
+              Detalhes do Saque
+            </DialogTitle>
+            <DialogDescription className="text-white/40 text-sm">
+              Protocolo: {selectedTransaction?.protocol || selectedTransaction?.id?.substring(0, 8)}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedTransaction && (
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* User Info */}
+              <div className="p-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-lg bg-star/20 flex items-center justify-center text-star font-bold text-lg">
+                    {selectedTransaction.profile_avatar}
+                  </div>
+                  <div>
+                    <p className="font-display font-bold text-lg">{selectedTransaction.profile_name}</p>
+                    <p className="text-white/40 text-sm">{selectedTransaction.profile_email || "Email não disponível"}</p>
+                    {selectedTransaction.profile_document && (
+                      <p className="text-white/40 text-xs">CPF: {selectedTransaction.profile_document}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-        {isLoading ? (
-          <div className="flex justify-center items-center py-16 gap-2 text-white/40 text-sm">
-            <Loader2 className="animate-spin" size={16} /> Carregando transações...
+              {/* Transaction Details */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-white/40 text-xs mb-1 flex items-center gap-1">
+                    <Hash className="w-3 h-3" /> Protocolo
+                  </p>
+                  <p className="font-mono text-sm text-star">{selectedTransaction.protocol || "N/A"}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-white/40 text-xs mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Data/Hora
+                  </p>
+                  <p className="font-display text-sm">{formatDate(selectedTransaction.created_at)}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-white/40 text-xs mb-1">Valor Solicitado</p>
+                  <p className="font-display font-bold text-emerald-400 text-lg">R$ {selectedTransaction.amount.toLocaleString("pt-BR")}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-white/40 text-xs mb-1">Status</p>
+                  <Badge className={`text-xs border ${statusStyle[selectedTransaction.status]}`}>
+                    {statusLabel[selectedTransaction.status]}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* PIX Data */}
+              {selectedTransaction.pix_key && (
+                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                  <p className="font-display font-bold text-sm text-blue-400 mb-3 flex items-center gap-2">
+                    <CreditCardIcon className="w-4 h-4" />
+                    Dados doPIX
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Chave PIX:</span>
+                      <span className="font-mono">{selectedTransaction.pix_key}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Tipo:</span>
+                      <span className="uppercase">{selectedTransaction.pix_key_type || "CPF"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Titular:</span>
+                      <span>{selectedTransaction.pix_recipient_name}</span>
+                    </div>
+                    {selectedTransaction.pix_recipient_bank && (
+                      <div className="flex justify-between">
+                        <span className="text-white/40">Banco:</span>
+                        <span>{selectedTransaction.pix_recipient_bank}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Conversion Data */}
+              {selectedTransaction.converted_currency && (
+                <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                  <p className="font-display font-bold text-sm text-purple-400 mb-3 flex items-center gap-2">
+                    <ArrowRightLeft className="w-4 h-4" />
+                    Dados da Conversão
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Moeda:</span>
+                      <span className="uppercase">{selectedTransaction.converted_currency}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Quantidade:</span>
+                      <span>{selectedTransaction.converted_amount?.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/40">Taxa:</span>
+                      <span>R$ {selectedTransaction.conversion_rate}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Processing Info */}
+              {(selectedTransaction.processed_by || selectedTransaction.processed_at) && (
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+                  <p className="text-white/40 text-xs mb-2">Informações do Processamento</p>
+                  <div className="space-y-1 text-sm">
+                    {selectedTransaction.processed_by && (
+                      <p><span className="text-white/40">Por:</span> {selectedTransaction.processed_by}</p>
+                    )}
+                    {selectedTransaction.processed_at && (
+                      <p><span className="text-white/40">Em:</span> {formatDate(selectedTransaction.processed_at)}</p>
+                    )}
+                    {selectedTransaction.admin_notes && (
+                      <p><span className="text-white/40">Notas:</span> {selectedTransaction.admin_notes}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              {selectedTransaction.status === "pending" && (
+                <div className="flex gap-2 pt-2">
+                  <Button 
+                    onClick={() => { handleApprove(selectedTransaction.id); }}
+                    className="flex-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30"
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Aprovar
+                  </Button>
+                  <Button 
+                    onClick={() => setShowRejectModal(true)}
+                    className="flex-1 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Rejeitar
+                  </Button>
+                </div>
+              )}
+
+              <Button 
+                onClick={() => { setSelectedTransaction(selectedTransaction); setShowNotificationModal(true); }}
+                variant="outline"
+                className="w-full border-white/20 text-white/60 hover:bg-white/5"
+              >
+                <Bell className="w-4 h-4 mr-2" />
+                Enviar Notificação
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Confirmation Modal */}
+      <Dialog open={showRejectModal} onOpenChange={setShowRejectModal}>
+        <DialogContent className="bg-[#0d0f1a] border-white/10 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-lg flex items-center gap-2 text-red-400">
+              <XCircle className="w-5 h-5" />
+              Confirmar Rejeição
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <p className="text-white/60 text-sm">
+              Você está prestes a rejeitar o saque de <span className="text-white font-bold">R$ {selectedTransaction?.amount.toLocaleString("pt-BR")}</span> para <span className="text-white font-bold">{selectedTransaction?.profile_name}</span>.
+            </p>
+            
+            <div>
+              <Label className="text-white/40 text-xs mb-2 block">Motivo da rejeição (opcional)</Label>
+              <Textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Ex: Dados PIX inválidos, saldo insuficiente..."
+                className="bg-white/5 border-white/10 text-white placeholder:text-white/20 resize-none"
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button 
+                onClick={() => setShowRejectModal(false)}
+                variant="outline"
+                className="flex-1 border-white/20 text-white/60 hover:bg-white/5"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleReject}
+                disabled={rejectTxn.isPending}
+                className="flex-1 bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30"
+              >
+                {rejectTxn.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Confirmar Rejeição
+              </Button>
+            </div>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/5">
-                  <th className="text-left p-4 text-white/40 text-xs font-medium">ID / Data</th>
-                  <th className="text-left p-4 text-white/40 text-xs font-medium">Usuário</th>
-                  <th className="text-left p-4 text-white/40 text-xs font-medium">Tipo</th>
-                  <th className="text-left p-4 text-white/40 text-xs font-medium">Método</th>
-                  <th className="text-left p-4 text-white/40 text-xs font-medium">Valor</th>
-                  <th className="text-left p-4 text-white/40 text-xs font-medium">Status</th>
-                  <th className="text-right p-4 text-white/40 text-xs font-medium">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx, i) => (
-                  <motion.tr key={tx.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
-                    className="border-b border-white/3 hover:bg-white/2 transition-colors">
-                    <td className="p-4">
-                      <p className="text-white font-mono text-xs">{tx.id.split('-')[1]?.substring(0,6) || tx.id.substring(0,8)}</p>
-                      <p className="text-white/30 text-[10px] mt-0.5">{timeAgo(tx.created_at)}</p>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">
-                          {tx.profile_avatar}
-                        </div>
-                        <span className="text-white/80 text-xs font-medium">{tx.profile_name}</span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className={`flex items-center gap-1.5 text-xs font-medium ${tx.type === "deposit" ? "text-emerald-400" : "text-blue-400"}`}>
-                        {tx.type === "deposit" ? <ArrowDownRight size={13} /> : <ArrowUpRight size={13} />}
-                        {tx.type === "deposit" ? "Depósito" : "Saque"}
-                      </div>
-                    </td>
-                    <td className="p-4 text-white/60 text-xs">{tx.method}</td>
-                    <td className="p-4 font-mono text-white text-xs font-semibold">R$ {tx.amount.toLocaleString("pt-BR")}</td>
-                    <td className="p-4">
-                      <Badge className={`text-[10px] border ${statusStyle[tx.status]}`}>{statusLabel[tx.status]}</Badge>
-                    </td>
-                    <td className="p-4 text-right">
-                      {tx.status === "pending" && tx.type === "withdrawal" ? (
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={() => handleApprove(tx.id)}
-                            disabled={approveTxn.isPending}
-                            className="w-7 h-7 rounded-lg bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20 flex items-center justify-center transition-colors shadow-sm disabled:opacity-50"
-                          >
-                            {approveTxn.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                          </button>
-                          <button className="w-7 h-7 rounded-lg bg-red-400/10 text-red-400 hover:bg-red-400/20 flex items-center justify-center transition-colors shadow-sm">
-                            <XCircle size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <button className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/40 hover:text-white transition-colors ml-auto">
-                          <Eye size={14} />
-                        </button>
-                      )}
-                    </td>
-                  </motion.tr>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Notification Modal */}
+      <Dialog open={showNotificationModal} onOpenChange={setShowNotificationModal}>
+        <DialogContent className="bg-[#0d0f1a] border-white/10 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display font-bold text-lg flex items-center gap-2">
+              <Send className="w-5 h-5 text-star" />
+              Enviar Notificação
+            </DialogTitle>
+            <DialogDescription className="text-white/40 text-sm">
+              Enviar mensagem para: {selectedTransaction?.profile_name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label className="text-white/40 text-xs mb-2 block">Tipo de notificação</Label>
+              <div className="flex gap-2">
+                {(["info", "success", "warning", "error"] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setNotificationType(type)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium capitalize transition-all ${
+                      notificationType === type 
+                        ? type === "info" ? "bg-blue-500/20 text-blue-400" :
+                          type === "success" ? "bg-emerald-500/20 text-emerald-400" :
+                          type === "warning" ? "bg-yellow-500/20 text-yellow-400" :
+                          "bg-red-500/20 text-red-400"
+                        : "bg-white/5 text-white/40 hover:bg-white/10"
+                    }`}
+                  >
+                    {type === "info" ? "Info" : 
+                     type === "success" ? "Sucesso" : 
+                     type === "warning" ? "Alerta" : "Erro"}
+                  </button>
                 ))}
-              </tbody>
-            </table>
-            {transactions.length === 0 && (
-              <div className="text-center py-12 text-white/30 text-sm">Nenhuma transação encontrada.</div>
-            )}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-white/40 text-xs mb-2 block">Título</Label>
+              <Input
+                value={notificationTitle}
+                onChange={(e) => setNotificationTitle(e.target.value)}
+                placeholder="Ex: Saque aprovado, Atualização needed..."
+                className="bg-white/5 border-white/10 text-white placeholder:text-white/20"
+              />
+            </div>
+
+            <div>
+              <Label className="text-white/40 text-xs mb-2 block">Mensagem</Label>
+              <Textarea
+                value={notificationMessage}
+                onChange={(e) => setNotificationMessage(e.target.value)}
+                placeholder="Digite a mensagem para o usuário..."
+                className="bg-white/5 border-white/10 text-white placeholder:text-white/20 resize-none"
+                rows={4}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button 
+                onClick={() => setShowNotificationModal(false)}
+                variant="outline"
+                className="flex-1 border-white/20 text-white/60 hover:bg-white/5"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSendNotification}
+                className="flex-1 gradient-star text-primary-foreground font-display font-bold"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Enviar
+              </Button>
+            </div>
           </div>
-        )}
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
